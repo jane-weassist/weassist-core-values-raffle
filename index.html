@@ -141,8 +141,16 @@
               <span class="chip">Names per prize
                 <input type="number" id="winnersPerPrize" min="1" max="20" step="1" value="1">
               </span>
+              <span class="chip">Background
+                <input type="file" id="bgUpload" accept="image/*" style="width:180px;">
+              </span>
               <button class="danger-btn" id="resetAll">Reset Everything</button>
             </div>
+          </div>
+          <div class="row" style="gap:8px;">
+            <input id="bgUrl" placeholder="Paste background image URL (optional)" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--accent-yellow); background:#0c133a; color:var(--text)">
+            <button class="ghost-btn" id="applyBg">Apply Background</button>
+            <button class="ghost-btn" id="clearBg">Clear Background</button>
           </div>
           <div>
             <details>
@@ -196,6 +204,12 @@
     const importSample = document.getElementById('importSample');
     const resetAll = document.getElementById('resetAll');
     const winnersPerPrizeInput = document.getElementById('winnersPerPrize');
+    const bgUpload = document.getElementById('bgUpload');
+    const bgUrl = document.getElementById('bgUrl');
+    const applyBg = document.getElementById('applyBg');
+    const clearBg = document.getElementById('clearBg');
+    const bg1 = document.getElementById('bg1');
+    const bg2 = document.getElementById('bg2');
     const syncStatus = document.getElementById('syncStatus');
 
     let drawing = false;
@@ -223,6 +237,12 @@
           prizes: data.prizes || [],
           winnersPerPrize: data.winnersPerPrize || 1
         };
+        // Apply background if exists
+        if (data.backgroundUrl) {
+          setBackground(data.backgroundUrl);
+        } else {
+          setBackground(null);
+        }
       }
     });
 
@@ -283,6 +303,13 @@
         namesInput.value = (currentData.names || []).join('\n');
         prizesInput.value = (currentData.prizes || []).join('\n');
         winnersPerPrizeInput.value = currentData.winnersPerPrize || 1;
+        // Load current background URL if exists
+        get(dataRef).then((snapshot) => {
+          const data = snapshot.val();
+          if (data && data.backgroundUrl) {
+            bgUrl.value = data.backgroundUrl;
+          }
+        });
       } else {
         pinMsg.textContent = 'Incorrect PIN';
         adminFields.style.display = 'none';
@@ -321,6 +348,70 @@
     function splitLines(text) {
       return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split(/\n/).map(s => s.trim()).filter(Boolean);
     }
+
+    function setBackground(url) {
+      if (url) {
+        bg1.style.backgroundImage = `url(${url})`;
+        bg2.style.backgroundImage = `url(${url})`;
+        bg1.style.display = bg2.style.display = 'block';
+      } else {
+        bg1.style.display = bg2.style.display = 'none';
+        bg1.style.backgroundImage = bg2.style.backgroundImage = 'none';
+      }
+    }
+
+    // Background upload via file
+    bgUpload.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      
+      // Check file size (limit to 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image too large! Please use an image under 5MB.');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result;
+        const snapshot = await get(dataRef);
+        const currentDataSnap = snapshot.val() || {};
+        await set(dataRef, {
+          ...currentDataSnap,
+          backgroundUrl: dataUrl
+        });
+        toast('Background uploaded & synced!');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Background apply URL
+    applyBg.addEventListener('click', async () => {
+      const url = (bgUrl.value || '').trim();
+      if (!url) {
+        toast('Please paste a valid image URL or upload a file.');
+        return;
+      }
+      const snapshot = await get(dataRef);
+      const currentDataSnap = snapshot.val() || {};
+      await set(dataRef, {
+        ...currentDataSnap,
+        backgroundUrl: url
+      });
+      toast('Background applied & synced!');
+    });
+
+    // Background clear
+    clearBg.addEventListener('click', async () => {
+      const snapshot = await get(dataRef);
+      const currentDataSnap = snapshot.val() || {};
+      await set(dataRef, {
+        ...currentDataSnap,
+        backgroundUrl: null
+      });
+      bgUrl.value = '';
+      toast('Background cleared for all users.');
+    });
 
     drawBtn.addEventListener('click', async () => {
       if (drawing) return;
